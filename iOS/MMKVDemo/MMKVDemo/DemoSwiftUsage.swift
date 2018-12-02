@@ -21,15 +21,15 @@
 import Foundation
 
 
-@objc class DemoSwiftUsage : NSObject {
-	func testSwiftFunctionality() {
+class DemoSwiftUsage : NSObject {
+	@objc func testSwiftFunctionality() {
 
         guard let mmkv = MMKV(mmapID: "testSwift") else {
             return
         }
 
         mmkv.set(true, forKey: "bool")
-        print("Swift: bool = \(mmkv.boolValue(forKey: "bool"))")
+        print("Swift: bool = \(mmkv.bool(forKey: "bool"))")
 
         mmkv.set(Int32(-1024), forKey: "int32")
         print("Swift: int32 = \(mmkv.int32(forKey: "int32"))")
@@ -47,7 +47,7 @@ import Foundation
         print("Swift: float = \(mmkv.float(forKey: "float"))")
 
         mmkv.set(Double.infinity, forKey: "double")
-        print("Swift: double = \(mmkv.float(forKey: "double"))")
+        print("Swift: double = \(mmkv.double(forKey: "double"))")
 
         mmkv.set("Hello from Swift", forKey: "string")
         print("Swift: string = \(mmkv.object(of: NSString.self, forKey: "string") ?? "")")
@@ -62,6 +62,6 @@ import Foundation
         print("Swift: data = \(str)")
 
         mmkv.removeValue(forKey: "bool")
-        print("Swift: after delete bool = \(mmkv.boolValue(forKey: "bool"))")
+        print("Swift: after delete bool = \(mmkv.bool(forKey: "bool"))")
 	}
 }

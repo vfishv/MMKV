@@ -1,5 +1,49 @@
 # MMKV Change Log
 
+## v1.0.14 / 2018-11-30
+### iOS / macOS
+What's new  
+
+* Setting `nil` value to reset a key is supported now.
+* Rename `boolValue(forKey:)` to `bool(forKey:)` for Swift.
+
+
+### Android
+What's new  
+
+* `Parcelable` objects can be stored directly into MMKV now.
+* Setting `null` value to reset a key is supported now.
+* Fix an issue that MMKV's file size might expand unexpectly large in some case.
+* Fix an issue that MMKV might crash on multi-thread removing and getting on the same key.
+
+
+## v1.0.13 / 2018-11-09
+### iOS / macOS
+What's new  
+
+* Special chars like `/` are supported in MMKV now. The file name of MMKV with special mmapID will be encoded with md5 and stored in seperate folder.
+* Add **callback** for MMKV error handling. You can make MMKV to recover instead of discard when crc32 check fail happens.
+* Add `trim` and `close` operation. Generally speaking they are not necessary in daily usage. Use them if you worry about disk / memory / fd usage.
+* Fix an issue that MMKV's file size might expand unexpectly large in some case.
+
+Known Issues
+
+* Setting `nil` value to reset a key will be ignored. Use `remove` instead.
+
+### Android
+What's new  
+
+* Add static linked of libc++ to trim AAR size. Use it when there's no other lib in your App embeds `libc++_shared.so`. Or if you already have an older version of `libc++_shared.so` that doesn't agree with MMKV.  
+Add `implementation 'com.tencent:mmkv-static:1.0.13'` to your App's gradle setting to integrate.
+* Special chars like `/` are supported in MMKV now. The file name of MMKV with special mmapID will be encoded with md5 and stored in seperate folder.
+* Add **callback** for MMKV error handling. You can make MMKV to recover instead of discard when crc32 check fail happens.
+* Add `trim` and `close` operation. Generally speaking they are not necessary in daily usage. Use them if you worry about disk / memory / fd usage.
+
+Known Issues
+
+* Setting `null` value to reset a key will be ignored. Use `remove` instead.
+* MMKV's file size might expand unexpectly large in some case.
+
 ## v1.0.12 / 2018-10-18
 ### iOS / macOS
 What's new  

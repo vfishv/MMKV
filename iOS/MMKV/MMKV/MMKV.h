@@ -18,7 +18,7 @@
  * limitations under the License.
  */
 
-#import <Foundation/Foundation.h>
+#import "MMKVHandler.h"
 
 @interface MMKV : NSObject
 
@@ -40,7 +40,7 @@ NS_ASSUME_NONNULL_BEGIN
 - (nullable NSData *)cryptKey;
 
 // object: NSString/NSData/NSDate/id<NSCoding>
-- (BOOL)setObject:(id)object forKey:(NSString *)key NS_SWIFT_NAME(set(_:forKey:));
+- (BOOL)setObject:(nullable id)object forKey:(NSString *)key NS_SWIFT_NAME(set(_:forKey:));
 
 - (BOOL)setBool:(BOOL)value forKey:(NSString *)key NS_SWIFT_NAME(set(_:forKey:));
 
@@ -58,8 +58,8 @@ NS_ASSUME_NONNULL_BEGIN
 
 - (nullable id)getObjectOfClass:(Class)cls forKey:(NSString *)key NS_SWIFT_NAME(object(of:forKey:));
 
-- (bool)getBoolForKey:(NSString *)key NS_SWIFT_NAME(boolValue(forKey:));
-- (bool)getBoolForKey:(NSString *)key defaultValue:(bool)defaultValue NS_SWIFT_NAME(boolValue(forKey:defaultValue:));
+- (BOOL)getBoolForKey:(NSString *)key __attribute__((swift_name("bool(forKey:)")));
+- (BOOL)getBoolForKey:(NSString *)key defaultValue:(BOOL)defaultValue __attribute__((swift_name("bool(forKey:defaultValue:)")));
 
 - (int32_t)getInt32ForKey:(NSString *)key NS_SWIFT_NAME(int32(forKey:));
 - (int32_t)getInt32ForKey:(NSString *)key defaultValue:(int32_t)defaultValue NS_SWIFT_NAME(int32(forKey:defaultValue:));
@@ -91,9 +91,20 @@ NS_ASSUME_NONNULL_BEGIN
 
 - (void)removeValuesForKeys:(NSArray<NSString *> *)arrKeys NS_SWIFT_NAME(removeValues(forKeys:));
 
-- (void)clearMemoryCache;
-
 - (void)clearAll;
+
+// MMKV's size won't reduce after deleting key-values
+// call this method after lots of deleting f you care about disk usage
+// note that `clearAll` has the similar effect of `trim`
+- (void)trim;
+
+// call this method if the instance is no longer needed in the near future
+// any subsequent call to the instance is undefined behavior
+- (void)close;
+
+// call this method if you are facing memory-warning
+// any subsequent call to the instance will load all key-values from file again
+- (void)clearMemoryCache;
 
 // you don't need to call this, really, I mean it
 // unless you care about out of battery
@@ -101,6 +112,9 @@ NS_ASSUME_NONNULL_BEGIN
 
 // for CrashProtected Only!!
 + (BOOL)isFileValid:(NSString *)mmapID NS_SWIFT_NAME(isFileValid(for:));
+
++ (void)registerHandler:(id<MMKVHandler>)handler;
++ (void)unregiserHandler;
 
 NS_ASSUME_NONNULL_END
 

@@ -22,6 +22,9 @@
 #import "MMKVDemo-Swift.h"
 #import <MMKV/MMKV.h>
 
+@interface ViewController () <MMKVHandler>
+@end
+
 @implementation ViewController {
 	NSMutableArray *m_arrStrings;
 	NSMutableArray *m_arrStrKeys;
@@ -32,6 +35,8 @@
 
 - (void)viewDidLoad {
 	[super viewDidLoad];
+
+	[MMKV registerHandler:self];
 
 	[self funcionalTest];
 	//[self testReKey];
@@ -56,7 +61,7 @@
 }
 
 - (void)funcionalTest {
-	MMKV *mmkv = [MMKV defaultMMKV];
+	MMKV *mmkv = [MMKV mmkvWithID:@"test/case1"];
 
 	[mmkv setBool:YES forKey:@"bool"];
 	NSLog(@"bool:%d", [mmkv getBoolForKey:@"bool"]);
@@ -82,6 +87,12 @@
 	[mmkv setObject:@"hello, mmkv" forKey:@"string"];
 	NSLog(@"string:%@", [mmkv getObjectOfClass:NSString.class forKey:@"string"]);
 
+	[mmkv setObject:nil forKey:@"string"];
+	NSLog(@"string after set nil:%@, containsKey:%d",
+	      [mmkv getObjectOfClass:NSString.class
+	                      forKey:@"string"],
+	      [mmkv containsKey:@"string"]);
+
 	[mmkv setObject:[NSDate date] forKey:@"date"];
 	NSLog(@"date:%@", [mmkv getObjectOfClass:NSDate.class forKey:@"date"]);
 
@@ -91,6 +102,8 @@
 
 	[mmkv removeValueForKey:@"bool"];
 	NSLog(@"bool:%d", [mmkv getBoolForKey:@"bool"]);
+
+	[mmkv close];
 }
 
 - (void)testMMKV:(NSString *)mmapID withCryptKey:(NSData *)cryptKey decodeOnly:(BOOL)decodeOnly {
@@ -195,6 +208,9 @@
 	[self mmkvBatchReadInt:loops];
 	[self mmkvBatchWriteString:loops];
 	[self mmkvBatchReadString:loops];
+
+	//[self mmkvBatchDeleteString:loops];
+	//[[MMKV defaultMMKV] trim];
 }
 
 - (void)mmkvBatchWriteInt:(int)loops {
@@ -256,6 +272,21 @@
 		NSDate *endDate = [NSDate date];
 		int cost = [endDate timeIntervalSinceDate:startDate] * 1000;
 		NSLog(@"mmkv read string %d times, cost:%d ms", loops, cost);
+	}
+}
+
+- (void)mmkvBatchDeleteString:(int)loops {
+	@autoreleasepool {
+		NSDate *startDate = [NSDate date];
+
+		MMKV *mmkv = [MMKV defaultMMKV];
+		for (int index = 0; index < loops; index++) {
+			NSString *strKey = m_arrStrKeys[index];
+			[mmkv removeValueForKey:strKey];
+		}
+		NSDate *endDate = [NSDate date];
+		int cost = [endDate timeIntervalSinceDate:startDate] * 1000;
+		NSLog(@"mmkv delete string %d times, cost:%d ms", loops, cost);
 	}
 }
 
@@ -347,6 +378,16 @@
 			NSLog(@"brutleTest size=%zu", mmkv.totalSize);
 		}
 	}
+}
+
+#pragma mark - MMKVHandler
+
+- (MMKVRecoverStrategic)onMMKVCRCCheckFail:(NSString *)mmapID {
+	return MMKVOnErrorRecover;
+}
+
+- (MMKVRecoverStrategic)onMMKVFileLengthError:(NSString *)mmapID {
+	return MMKVOnErrorRecover;
 }
 
 @end
