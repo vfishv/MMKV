@@ -1,6 +1,6 @@
-[![license](https://img.shields.io/badge/license-BSD_3-brightgreen.svg?style=flat)](https://github.com/Tencent/MMKV/blob/master/LICENSE.txt)
+[![license](https://img.shields.io/badge/license-BSD_3-brightgreen.svg?style=flat)](https://github.com/Tencent/MMKV/blob/master/LICENSE.TXT)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/Tencent/MMKV/pulls)
-[![Release Version](https://img.shields.io/badge/release-1.0.14-brightgreen.svg)](https://github.com/Tencent/MMKV/releases)
+[![Release Version](https://img.shields.io/badge/release-1.0.15-brightgreen.svg)](https://github.com/Tencent/MMKV/releases)
 [![Platform](https://img.shields.io/badge/Platform-%20iOS%20%7C%20Android-brightgreen.svg)](https://github.com/Tencent/MMKV/wiki/home)
 
 中文版本请参看[这里](./readme_cn.md)
@@ -43,8 +43,8 @@ BOOL bValue = [mmkv getBoolForKey:@"bool"];
 [mmkv setInt32:-1024 forKey:@"int32"];
 int32_t iValue = [mmkv getInt32ForKey:@"int32"];
     
-[mmkv setObject:@"hello, mmkv" forKey:@"string"];
-NSString *str = [mmkv getObjectOfClass:NSString.class forKey:@"string"];
+[mmkv setString:@"hello, mmkv" forKey:@"string"];
+NSString *str = [mmkv getStringForKey:@"string"];
 ```
 
 Full tutorials can be found [here](https://github.com/Tencent/MMKV/wiki/iOS_tutorial).
@@ -75,8 +75,8 @@ Add the following lines to `build.gradle` on your app module:
 
 ```gradle
 dependencies {
-    implementation 'com.tencent:mmkv:1.0.14'
-    // replace "1.0.14" with any available version
+    implementation 'com.tencent:mmkv:1.0.15'
+    // replace "1.0.15" with any available version
 }
 ```
 
@@ -129,6 +129,8 @@ Check out the [CHANGELOG.md](./CHANGELOG.md) for details of change history.
 ## Contributing
 
 If you are interested in contributing, check out the [CONTRIBUTING.md](https://github.com/Tencent/MMKV/blob/master/CONTRIBUTING.md), also join our [Tencent OpenSource Plan](https://opensource.tencent.com/contribution).
+
+To give clarity of what is expected of our members, MMKV has adopted the code of conduct defined by the Contributor Covenant, which is widely used. And we think it articulates our values well. For more, check out the [Code of Conduct](https://github.com/Tencent/MMKV/blob/master/CODE_OF_CONDUCT.md).
 
 ## FAQ & Feedback
 Check out the [FAQ](https://github.com/Tencent/MMKV/wiki/FAQ) first. Should there be any questions, don't hesitate to create [issues](https://github.com/Tencent/MMKV/issues).
