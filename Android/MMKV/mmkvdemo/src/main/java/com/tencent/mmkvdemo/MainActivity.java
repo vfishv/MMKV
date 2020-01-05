@@ -20,32 +20,32 @@
 
 package com.tencent.mmkvdemo;
 
+import static com.tencent.mmkvdemo.BenchMarkBaseService.AshmemMMKV_ID;
+import static com.tencent.mmkvdemo.BenchMarkBaseService.AshmemMMKV_Size;
+
 import android.content.Intent;
 import android.content.SharedPreferences;
-import android.os.SystemClock;
-import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
+import android.os.SystemClock;
 import android.util.Log;
 import android.view.View;
 import android.widget.Button;
 import android.widget.TextView;
-
+import androidx.appcompat.app.AppCompatActivity;
+import com.getkeepsafe.relinker.ReLinker;
+import com.tencent.mmkv.MMKV;
+import com.tencent.mmkv.MMKVContentChangeNotification;
+import com.tencent.mmkv.MMKVHandler;
+import com.tencent.mmkv.MMKVLogLevel;
+import com.tencent.mmkv.MMKVRecoverStrategic;
+import com.tencent.mmkv.NativeBuffer;
 import java.util.Arrays;
 import java.util.HashSet;
-
-import com.tencent.mmkv.MMKV;
-import com.tencent.mmkv.MMKVHandler;
-import com.tencent.mmkv.MMKVRecoverStrategic;
-import com.tencent.mmkv.MMKVLogLevel;
-import com.getkeepsafe.relinker.ReLinker;
-import com.tencent.mmkv.NativeBuffer;
-
+import java.util.LinkedHashSet;
 import org.jetbrains.annotations.Nullable;
 
-import static com.tencent.mmkvdemo.BenchMarkBaseService.AshmemMMKV_ID;
-import static com.tencent.mmkvdemo.BenchMarkBaseService.AshmemMMKV_Size;
-
-public class MainActivity extends AppCompatActivity implements MMKVHandler {
+public class MainActivity
+    extends AppCompatActivity implements MMKVHandler, MMKVContentChangeNotification {
     static private final String KEY_1 = "Ashmem_Key_1";
     static private final String KEY_2 = "Ashmem_Key_2";
     @Override
@@ -54,14 +54,14 @@ public class MainActivity extends AppCompatActivity implements MMKVHandler {
         setContentView(R.layout.activity_main);
 
         // set root dir
-        // String rootDir = "mmkv root: " + MMKV.initialize(this);
-        String dir = getFilesDir().getAbsolutePath() + "/mmkv_2";
+        //String rootDir = MMKV.initialize(this);
+        String dir = getFilesDir().getAbsolutePath() + "/mmkv";
         String rootDir = MMKV.initialize(dir, new MMKV.LibLoader() {
             @Override
             public void loadLibrary(String libName) {
                 ReLinker.loadLibrary(MainActivity.this, libName);
             }
-        });
+        }, MMKVLogLevel.LevelInfo);
         Log.i("MMKV", "mmkv root: " + rootDir);
 
         // set log level
@@ -71,6 +71,7 @@ public class MainActivity extends AppCompatActivity implements MMKVHandler {
         //MMKV.setLogLevel(MMKVLogLevel.LevelNone);
 
         MMKV.registerHandler(this);
+        MMKV.registerContentChangeNotify(this);
 
         TextView tv = (TextView) findViewById(R.id.sample_text);
         tv.setText(rootDir);
@@ -85,6 +86,7 @@ public class MainActivity extends AppCompatActivity implements MMKVHandler {
                 baseline.sqliteBaselineTest();
 
                 //testInterProcessReKey();
+                //testInterProcessLockPhase2();
             }
         });
 
@@ -124,6 +126,7 @@ public class MainActivity extends AppCompatActivity implements MMKVHandler {
         String otherDir = getFilesDir().getAbsolutePath() + "/mmkv_3";
         MMKV kv = testMMKV("test/AES", "Tencent MMKV", false, otherDir);
         if (kv != null) {
+            kv.checkContentChangedByOuterProcess();
             kv.close();
         }
 
@@ -132,8 +135,11 @@ public class MainActivity extends AppCompatActivity implements MMKVHandler {
 
         KotlinUsecaseKt.kotlinFunctionalTest();
 
-        //testInterProcessLogic();
-        //estImportSharedPreferences();
+        testInterProcessLogic();
+        testImportSharedPreferences();
+        //testInterProcessLockPhase1();
+        //testCornerSize();
+        //testFastRemoveCornerSize();
     }
 
     @Override
@@ -278,10 +284,12 @@ public class MainActivity extends AppCompatActivity implements MMKVHandler {
         Log.i("MMKV", "double: " + kv.decodeDouble("double"));
         Log.i("MMKV", "string: " + kv.getString("string", null));
         Log.i("MMKV", "string-set: " + kv.getStringSet("string-set", null));
+        Log.i("MMKV",
+              "linked-string-set: " + kv.decodeStringSet("string-set", null, LinkedHashSet.class));
     }
 
     private void testReKey() {
-        final String mmapID = "testAES_reKey";
+        final String mmapID = "testAES_reKey1";
         MMKV kv = testMMKV(mmapID, null, false, null);
         if (kv == null) {
             return;
@@ -343,7 +351,9 @@ public class MainActivity extends AppCompatActivity implements MMKVHandler {
 
         kv.removeValueForKey("bool");
         Log.i("MMKV", "bool: " + kv.decodeBool("bool"));
-        kv.removeValuesForKeys(new String[] {"int", "long"});
+        kv.removeValueForKey("int");
+        kv.removeValueForKey("long");
+        //kv.removeValuesForKeys(new String[] {"int", "long"});
         //kv.clearAll();
         kv.clearMemoryCache();
         Log.i("MMKV", "allKeys: " + Arrays.toString(kv.allKeys()));
@@ -402,6 +412,57 @@ public class MainActivity extends AppCompatActivity implements MMKVHandler {
         }
     }
 
+    private void testInterProcessLockPhase1() {
+        MMKV mmkv1 = MMKV.mmkvWithID(MyService.LOCK_PHASE_1, MMKV.MULTI_PROCESS_MODE);
+        mmkv1.lock();
+        Log.d("locked in main", MyService.LOCK_PHASE_1);
+
+        Intent intent = new Intent(this, MyService.class);
+        intent.putExtra(BenchMarkBaseService.CMD_ID, MyService.CMD_LOCK);
+        startService(intent);
+    }
+    private void testInterProcessLockPhase2() {
+        MMKV mmkv2 = MMKV.mmkvWithID(MyService.LOCK_PHASE_2, MMKV.MULTI_PROCESS_MODE);
+        mmkv2.lock();
+        Log.d("locked in main", MyService.LOCK_PHASE_2);
+    }
+
+    private void testCornerSize() {
+        MMKV mmkv = MMKV.mmkvWithID("cornerSize", MMKV.MULTI_PROCESS_MODE, "aes");
+        mmkv.clearAll();
+        int size = MMKV.pageSize() - 2;
+        size -= 4;
+        String key = "key";
+        int keySize = 3 + 1;
+        size -= keySize;
+        int valueSize = 3;
+        size -= valueSize;
+        byte[] value = new byte[size];
+        mmkv.encode(key, value);
+    }
+
+    private void testFastRemoveCornerSize() {
+        MMKV mmkv = MMKV.mmkvWithID("fastRemoveCornerSize");
+        mmkv.clearAll();
+        int size = MMKV.pageSize() - 4;
+        size -= 4; // place holder size
+        String key = "key";
+        int keySize = 3 + 1;
+        size -= keySize;
+        int valueSize = 3;
+        size -= valueSize;
+        size -= (keySize + 1); // total size of fast remove
+        size /= 16;
+        byte[] value = new byte[size];
+        for (int i = 0; i < value.length; i++) {
+            value[i] = 'A';
+        }
+        for (int i = 0; i < 16; i++) {
+            mmkv.encode(key, value); // when a full write back is occur, here's corruption happens
+            mmkv.removeValueForKey(key);
+        }
+    }
+
     @Override
     public MMKVRecoverStrategic onMMKVCRCCheckFail(String mmapID) {
         return MMKVRecoverStrategic.OnErrorRecover;
@@ -437,5 +498,10 @@ public class MainActivity extends AppCompatActivity implements MMKVHandler {
                 Log.e("redirect logging MMKV", log);
                 break;
         }
+    }
+
+    @Override
+    public void onContentChangedByOuterProcess(String mmapID) {
+        Log.i("content changed", mmapID);
     }
 }

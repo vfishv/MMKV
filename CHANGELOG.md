@@ -1,5 +1,81 @@
 # MMKV Change Log
 
+## v1.0.23 / 2019-09-03
+
+### iOS / macOS
+What's new  
+
+* Fix a potential security leak on encrypted MMKV.
+
+### Android
+What's new  
+
+* Fix a potential security leak on encrypted MMKV.
+* Fix filename bug when compiled on Win32 environment.
+* Add option for decoding String Set into other `Set<>` classes other than the default `HashSet<String>`, check `decodeStringSet()` for details.
+* Add `putBytes()` & `getBytes()`, to make function names more clear and consistent.
+* Add notification of content changed by other process, check the new `MMKVContentChangeNotification<>` interface & `checkContentChangedByOuterProcess()` for details.
+
+### Win32
+What's new  
+
+* Fix a potential security leak on encrypted MMKV.
+* Fix `CriticalSection` init bug.
+
+## v1.0.22 / 2019-06-10
+
+### iOS / macOS
+What's new  
+
+* Fix a bug that MMKV will corrupt while adding just one key-value, and reboot or clear memory cache. This bug was introduced in v1.0.21.
+
+### Android
+What's new  
+
+* Fix a bug that MMKV will corrupt while adding just one key-value, and reboot or clear memory cache. This bug was introduced in v1.0.21.
+
+### Win32
+What's new  
+
+* Fix a bug that MMKV will corrupt while adding just one key-value, and reboot or clear memory cache. This bug was introduced in v1.0.21.
+
+## v1.0.21 / 2019-06-06
+### iOS / macOS
+What's new  
+
+* Fix a bug that MMKV might corrupt while repeatedly adding & removing key-value with specific length. This bug was introduced in v1.0.20.
+
+### Android
+What's new  
+
+* Fix a bug that MMKV might corrupt while repeatedly adding & removing key-value with specific length. This bug was introduced in v1.0.20.
+
+### Win32
+What's new  
+
+* Fix a bug that MMKV might corrupt while repeatedly adding & removing key-value with specific length. This bug was introduced in v1.0.20.
+
+## v1.0.20 / 2019-06-05
+### iOS / macOS
+What's new  
+
+* Fix a bug that MMKV might crash while storing key-value with specific length.
+* Fix a bug that `-[MMKV trim]` might not work properly.
+
+### Android
+What's new  
+
+* Migrate to AndroidX library.
+* Fix a bug that MMKV might crash while storing key-value with specific length.
+* Fix a bug that `trim()` might not work properly.
+* Fix a bug that dead-lock might be reported by Android mistakenly.
+* Using `RegisterNatives()` to simplify native method naming.
+
+### Win32
+* Fix a bug that MMKV might crash while storing key-value with specific length.
+* Fix a bug that `trim()` might not work properly.
+* Fix a bug that `clearAll()` might not work properly.
+
 ## v1.0.19 / 2019-04-22
 ### iOS / macOS
 What's new  

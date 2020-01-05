@@ -300,6 +300,11 @@ void MMKV::loadFromFile() {
     if (m_metaFile.isFileValid()) {
         m_metaInfo.read(m_metaFile.getMemory());
     }
+    if (m_crypter) {
+        if (m_metaInfo.m_version >= 2) {
+            m_crypter->reset(m_metaInfo.m_vector, sizeof(m_metaInfo.m_vector));
+        }
+    }
 
     m_fd = open(m_path.c_str(), O_RDWR | O_CREAT, S_IRWXU);
     if (m_fd < 0) {
@@ -326,22 +331,22 @@ void MMKV::loadFromFile() {
             MMKVError("fail to mmap [%s], %s", m_mmapID.c_str(), strerror(errno));
         } else {
             memcpy(&m_actualSize, m_ptr, Fixed32Size);
-            MMKVInfo("loading [%s] with %zu size in total, file size is %zu", m_mmapID.c_str(),
-                     m_actualSize, m_size);
+            MMKVInfo("loading [%s] with %zu size in total, file size is %zu, InterProcess %d",
+                     m_mmapID.c_str(), m_actualSize, m_size, m_isInterProcess);
             bool loadFromFile = false, needFullWriteback = false;
             if (m_actualSize > 0) {
                 if (m_actualSize < m_size && m_actualSize + Fixed32Size <= m_size) {
                     if (checkFileCRCValid()) {
                         loadFromFile = true;
                     } else {
-                        auto strategic = onMMKVCRCCheckFail(m_mmapID);
+                        auto strategic = mmkv::onMMKVCRCCheckFail(m_mmapID);
                         if (strategic == OnErrorRecover) {
                             loadFromFile = true;
                             needFullWriteback = true;
                         }
                     }
                 } else {
-                    auto strategic = onMMKVFileLengthError(m_mmapID);
+                    auto strategic = mmkv::onMMKVFileLengthError(m_mmapID);
                     if (strategic == OnErrorRecover) {
                         writeAcutalSize(m_size - Fixed32Size);
                         loadFromFile = true;
@@ -350,8 +355,8 @@ void MMKV::loadFromFile() {
                 }
             }
             if (loadFromFile) {
-                MMKVInfo("loading [%s] with crc %u sequence %u", m_mmapID.c_str(),
-                         m_metaInfo.m_crcDigest, m_metaInfo.m_sequence);
+                MMKVInfo("loading [%s] with crc %u sequence %u version %u", m_mmapID.c_str(),
+                         m_metaInfo.m_crcDigest, m_metaInfo.m_sequence, m_metaInfo.m_version);
                 MMBuffer inputBuffer(m_ptr + Fixed32Size, m_actualSize, MMBufferNoCopy);
                 if (m_crypter) {
                     decryptBuffer(*m_crypter, inputBuffer);
@@ -387,6 +392,11 @@ void MMKV::loadFromAshmem() {
     if (m_metaFile.isFileValid()) {
         m_metaInfo.read(m_metaFile.getMemory());
     }
+    if (m_crypter) {
+        if (m_metaInfo.m_version >= 2) {
+            m_crypter->reset(m_metaInfo.m_vector, sizeof(m_metaInfo.m_vector));
+        }
+    }
 
     if (m_fd < 0 || !m_ashmemFile) {
         MMKVError("ashmem file invalid %s, fd:%d", m_path.c_str(), m_fd);
@@ -401,8 +411,9 @@ void MMKV::loadFromAshmem() {
             if (m_actualSize > 0) {
                 if (m_actualSize < m_size && m_actualSize + Fixed32Size <= m_size) {
                     if (checkFileCRCValid()) {
-                        MMKVInfo("loading [%s] with crc %u sequence %u", m_mmapID.c_str(),
-                                 m_metaInfo.m_crcDigest, m_metaInfo.m_sequence);
+                        MMKVInfo("loading [%s] with crc %u sequence %u version %u",
+                                 m_mmapID.c_str(), m_metaInfo.m_crcDigest, m_metaInfo.m_sequence,
+                                 m_metaInfo.m_version);
                         MMBuffer inputBuffer(m_ptr + Fixed32Size, m_actualSize, MMBufferNoCopy);
                         if (m_crypter) {
                             decryptBuffer(*m_crypter, inputBuffer);
@@ -501,6 +512,7 @@ void MMKV::checkLoadData() {
 
         clearMemoryState();
         loadFromFile();
+        notifyContentChanged();
     } else if (m_metaInfo.m_crcDigest != metaInfo.m_crcDigest) {
         MMKVDebug("[%s] oldCrc %u, newCrc %u", m_mmapID.c_str(), m_metaInfo.m_crcDigest,
                   metaInfo.m_crcDigest);
@@ -523,7 +535,19 @@ void MMKV::checkLoadData() {
         } else {
             partialLoadFromFile();
         }
+        notifyContentChanged();
     }
+}
+
+void MMKV::notifyContentChanged() {
+    if (g_isContentChangeNotifying) {
+        mmkv::onContentChangedByOuterProcess(m_mmapID);
+    }
+}
+
+void MMKV::checkContentChanged() {
+    SCOPEDLOCK(m_lock);
+    checkLoadData();
 }
 
 void MMKV::clearAll() {
@@ -558,6 +582,7 @@ void MMKV::clearAll() {
         }
     }
 
+    updateIV(IncreaseSequence);
     clearMemoryState();
     loadFromFile();
 }
@@ -574,7 +599,11 @@ void MMKV::clearMemoryState() {
     m_hasFullWriteback = false;
 
     if (m_crypter) {
-        m_crypter->reset();
+        if (m_metaInfo.m_version >= 2) {
+            m_crypter->reset(m_metaInfo.m_vector, sizeof(m_metaInfo.m_vector));
+        } else {
+            m_crypter->reset();
+        }
     }
 
     if (m_output) {
@@ -599,6 +628,7 @@ void MMKV::clearMemoryState() {
     }
     m_size = 0;
     m_actualSize = 0;
+    m_metaInfo.m_crcDigest = 0;
 }
 
 void MMKV::close() {
@@ -633,7 +663,7 @@ void MMKV::trim() {
 
     fullWriteback();
     auto oldSize = m_size;
-    while (m_size > (m_actualSize * 2)) {
+    while (m_size > (m_actualSize + Fixed32Size) * 2) {
         m_size /= 2;
     }
     if (oldSize == m_size) {
@@ -642,7 +672,8 @@ void MMKV::trim() {
         return;
     }
 
-    MMKVInfo("trimming %s from %zu to %zu", m_mmapID.c_str(), oldSize, m_size);
+    MMKVInfo("trimming %s from %zu to %zu, actualSize %zu", m_mmapID.c_str(), oldSize, m_size,
+             m_actualSize);
 
     if (ftruncate(m_fd, m_size) != 0) {
         MMKVError("fail to truncate [%s] to size %zu, %s", m_mmapID.c_str(), m_size,
@@ -673,7 +704,12 @@ bool MMKV::ensureMemorySize(size_t newSize) {
         return false;
     }
 
-    if (newSize >= m_output->spaceLeft()) {
+    // make some room for placeholder
+    constexpr size_t ItemSizeHolderSize = 4;
+    if (m_dic.empty()) {
+        newSize += ItemSizeHolderSize;
+    }
+    if (newSize >= m_output->spaceLeft() || m_dic.empty()) {
         // try a full rewrite to make space
         static const int offset = pbFixed32Size(0);
         MMBuffer data = MiniPBCoder::encodeDataWithObject(m_dic);
@@ -729,7 +765,8 @@ bool MMKV::ensureMemorySize(size_t newSize) {
         }
 
         if (m_crypter) {
-            m_crypter->reset();
+            updateIV(KeepSequence);
+            m_crypter->reset(m_metaInfo.m_vector, sizeof(m_metaInfo.m_vector));
             auto ptr = (unsigned char *) data.getPtr();
             m_crypter->encrypt(ptr, ptr, data.length());
         }
@@ -771,16 +808,12 @@ bool MMKV::setDataForKey(MMBuffer &&data, const std::string &key) {
     SCOPEDLOCK(m_exclusiveProcessLock);
     checkLoadData();
 
-    // m_dic[key] = std::move(data);
-    auto itr = m_dic.find(key);
-    if (itr == m_dic.end()) {
-        itr = m_dic.emplace(key, std::move(data)).first;
-    } else {
-        itr->second = std::move(data);
+    auto ret = appendDataWithKey(data, key);
+    if (ret) {
+        m_dic[key] = std::move(data);
+        m_hasFullWriteback = false;
     }
-    m_hasFullWriteback = false;
-
-    return appendDataWithKey(itr->second, key);
+    return ret;
 }
 
 bool MMKV::removeDataForKey(const std::string &key) {
@@ -812,33 +845,18 @@ bool MMKV::appendDataWithKey(const MMBuffer &data, const std::string &key) {
     if (!hasEnoughSize || !isFileValid()) {
         return false;
     }
-    if (m_actualSize == 0) {
-        auto allData = MiniPBCoder::encodeDataWithObject(m_dic);
-        if (allData.length() > 0) {
-            if (m_crypter) {
-                m_crypter->reset();
-                auto ptr = (unsigned char *) allData.getPtr();
-                m_crypter->encrypt(ptr, ptr, allData.length());
-            }
-            writeAcutalSize(allData.length());
-            m_output->writeRawData(allData); // note: don't write size of data
-            recaculateCRCDigest();
-            return true;
-        }
-        return false;
-    } else {
-        writeAcutalSize(m_actualSize + size);
-        m_output->writeString(key);
-        m_output->writeData(data); // note: write size of data
 
-        auto ptr = (uint8_t *) m_ptr + Fixed32Size + m_actualSize - size;
-        if (m_crypter) {
-            m_crypter->encrypt(ptr, ptr, size);
-        }
-        updateCRCDigest(ptr, size, KeepSequence);
+    writeAcutalSize(m_actualSize + size);
+    m_output->writeString(key);
+    m_output->writeData(data); // note: write size of data
 
-        return true;
+    auto ptr = (uint8_t *) m_ptr + Fixed32Size + m_actualSize - size;
+    if (m_crypter) {
+        m_crypter->encrypt(ptr, ptr, size);
     }
+    updateCRCDigest(ptr, size, KeepSequence);
+
+    return true;
 }
 
 bool MMKV::fullWriteback() {
@@ -863,7 +881,8 @@ bool MMKV::fullWriteback() {
     if (allData.length() > 0) {
         if (allData.length() + Fixed32Size <= m_size) {
             if (m_crypter) {
-                m_crypter->reset();
+                updateIV(KeepSequence);
+                m_crypter->reset(m_metaInfo.m_vector, sizeof(m_metaInfo.m_vector));
                 auto ptr = (unsigned char *) allData.getPtr();
                 m_crypter->encrypt(ptr, ptr, allData.length());
             }
@@ -1021,6 +1040,22 @@ void MMKV::updateCRCDigest(const uint8_t *ptr, size_t length, bool increaseSeque
     if (m_metaInfo.m_version == 0) {
         m_metaInfo.m_version = 1;
     }
+    auto crcPtr = m_metaFile.getMemory();
+    m_metaInfo.write(crcPtr);
+}
+
+void MMKV::updateIV(bool increaseSequence) {
+    if (!m_metaFile.isFileValid()) {
+        return;
+    }
+
+    if (increaseSequence) {
+        m_metaInfo.m_sequence++;
+    }
+    if (m_metaInfo.m_version < 2) {
+        m_metaInfo.m_version = 2;
+    }
+    AESCrypt::fillRandomIV(m_metaInfo.m_vector);
     auto crcPtr = m_metaFile.getMemory();
     m_metaInfo.write(crcPtr);
 }
@@ -1387,7 +1422,7 @@ static string md5(const string &value) {
     char tmp[3] = {0}, buf[33] = {0};
     MD5((const unsigned char *) value.c_str(), value.size(), md);
     for (int i = 0; i < MD5_DIGEST_LENGTH; i++) {
-        sprintf(tmp, "%2.2x", md[i]);
+        snprintf(tmp, sizeof(tmp), "%2.2x", md[i]);
         strcat(buf, tmp);
     }
     return string(buf);
